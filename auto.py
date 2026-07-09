@@ -8,6 +8,7 @@ import numpy as np
 import tempfile
 import os
 from datetime import datetime
+from zoneinfo import ZoneInfo
 import json
 
 
@@ -122,7 +123,7 @@ async def predict(file: UploadFile = File(...)):
 
                 "action":"TRIGGER",
 
-                "time":datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                "time":datetime.now(ZoneInfo("Asia/Kolkata")).strftime("%Y-%m-%d %H:%M:%S")
 
             }
 
@@ -140,8 +141,7 @@ async def predict(file: UploadFile = File(...)):
 
                 "action":"NONE",
 
-                "time":datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
+                "time":datetime.now(ZoneInfo("Asia/Kolkata")).strftime("%Y-%m-%d %H:%M:%S")
             }
 
         )
