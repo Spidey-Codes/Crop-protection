@@ -31,12 +31,14 @@ firebase_admin.initialize_app(
 )
 # ---------------------------------------------------
 
-print("Loading YOLO model...")
+model = None
 
-model = YOLO(MODEL_PATH)
-
-print("Model Loaded.")
-
+@app.on_event("startup")
+def load_model():
+    global model
+    print("Loading YOLO model...")
+    model = YOLO(MODEL_PATH)
+    print("Model Loaded.")
 print(model.names)
 
 app = FastAPI(title="Crop Protection API")
