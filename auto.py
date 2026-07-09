@@ -8,6 +8,8 @@ import numpy as np
 import tempfile
 import os
 from datetime import datetime
+import json
+
 
 # ---------------------------------------------------
 # CONFIGURATION
@@ -17,7 +19,9 @@ MODEL_PATH = "best.pt"
 
 DATABASE_URL = "https://crop-protection-6f8ca-default-rtdb.asia-southeast1.firebasedatabase.app/"
 
-cred = credentials.Certificate("serviceAccountKey.json")
+firebase_json = json.loads(os.environ["FIREBASE_CREDENTIALS"])
+
+cred = credentials.Certificate(firebase_json)
 
 firebase_admin.initialize_app(
     cred,
@@ -25,7 +29,6 @@ firebase_admin.initialize_app(
         "databaseURL": DATABASE_URL
     }
 )
-
 # ---------------------------------------------------
 
 print("Loading YOLO model...")
