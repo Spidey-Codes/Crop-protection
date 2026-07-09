@@ -42,8 +42,6 @@ def load_model():
     print("Model Loaded.")
 #print(model.names)
 
-app = FastAPI(title="Crop Protection API")
-
 # ---------------------------------------------------
 # HOME
 # ---------------------------------------------------
