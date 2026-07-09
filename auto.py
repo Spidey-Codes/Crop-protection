@@ -30,6 +30,7 @@ firebase_admin.initialize_app(
     }
 )
 # ---------------------------------------------------
+app = FastAPI(title="Crop Protection API")
 
 model = None
 
@@ -39,7 +40,7 @@ def load_model():
     print("Loading YOLO model...")
     model = YOLO(MODEL_PATH)
     print("Model Loaded.")
-print(model.names)
+#print(model.names)
 
 app = FastAPI(title="Crop Protection API")
 
@@ -50,11 +51,11 @@ app = FastAPI(title="Crop Protection API")
 @app.get("/")
 def home():
 
-    return {
-        "status": "Running",
-        "model": MODEL_PATH,
-        "classes": model.names
-    }
+   return {
+    "status": "Running",
+    "model": MODEL_PATH,
+    "classes": model.names if model else []
+}
 
 # ---------------------------------------------------
 # PREDICTION
