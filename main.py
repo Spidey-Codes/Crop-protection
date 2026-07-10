@@ -31,11 +31,16 @@ FIREBASE_CRED    = "firebase_cred.json"
 SHEETS_NAME      = "Crop Predator Log"
 
 # Pre-filled Firebase URL
-FIREBASE_URL = os.environ.get(
-    "FIREBASE_URL",
-    "https://crop-protection-6f8ca-default-rtdb.asia-southeast1.firebasedatabase.app/"
-)
+firebase_json = json.loads(os.environ["FIREBASE_CREDENTIALS"])
 
+cred = credentials.Certificate(firebase_json)
+
+firebase_admin.initialize_app(
+    cred,
+    {
+        "databaseURL": DATABASE_URL
+    }
+)
 # Your model's class names exactly as trained
 CLASS_NAMES = ["Human", "Locust", "Monkey", "Wildboar"]
 
@@ -161,7 +166,7 @@ async def detect(background_tasks: BackgroundTasks, file: UploadFile = File(...)
 
         print(f"\n{'='*40}")
         print(f"DETECTED: {best_label} ({best_conf*100:.1f}%)")
-        print(f"Time: {datetime.now().strftime('%H:%M:%S')}")
+        print(f"time":datetime.now(ZoneInfo("Asia/Kolkata")).strftime("%Y-%m-%d %H:%M:%S")")
         print(f"Total detections: {total_detections}")
         print(f"{'='*40}")
 
