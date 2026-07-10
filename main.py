@@ -1,4 +1,3 @@
-cat > /mnt/user-data/outputs/main.py << 'EOF'
 """
 Smart Crop Predator Detection — Railway Cloud Server
 =====================================================
