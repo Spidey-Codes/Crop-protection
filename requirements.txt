@@ -1,10 +1,9 @@
-fastapi
-uvicorn
+fastapi==0.111.0
+uvicorn==0.30.0
 ultralytics
+firebase-admin==6.5.0
+gspread==6.1.2
+google-auth==2.30.0
 opencv-python-headless
 numpy
-firebase-admin
-python-multipart
-Pillow
-torch
-torchvision
+python-multipart==0.0.9
