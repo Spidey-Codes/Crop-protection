@@ -29,8 +29,8 @@ app = FastAPI()
 
 # ── Config ────────────────────────────────────────────────────
 MODEL_PATH       = "best.pt"
-CONFIDENCE       = 0.55
-COOLDOWN_SECONDS = 20
+CONFIDENCE       = 0.65
+COOLDOWN_SECONDS = 30
 CLASS_NAMES      = ["Human", "Locust", "Monkey", "Wildboar"]
 
 FIREBASE_URL = os.environ.get(
