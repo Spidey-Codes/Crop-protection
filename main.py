@@ -184,7 +184,7 @@ async def detect(
         print(f"{'='*40}")
 
         # Push to Firebase in background
-        background_tasks.add_task(push_to_firebase, best_label, bes
+        background_tasks.add_task(push_to_firebase, best_label, best_conf)
         return JSONResponse({
             "detected":         True,
             "class":            best_label,
