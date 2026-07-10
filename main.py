@@ -166,7 +166,7 @@ async def detect(background_tasks: BackgroundTasks, file: UploadFile = File(...)
 
         print(f"\n{'='*40}")
         print(f"DETECTED: {best_label} ({best_conf*100:.1f}%)")
-        print(f"time":datetime.now(ZoneInfo("Asia/Kolkata")).strftime("%Y-%m-%d %H:%M:%S")")
+        print(f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         print(f"Total detections: {total_detections}")
         print(f"{'='*40}")
 
