@@ -1,84 +1,112 @@
+cat > /mnt/user-data/outputs/main.py << 'EOF'
 """
-Smart Crop Predator Detection — Railway Cloud Server (Final)
-=============================================================
-Pre-filled with your Railway URL and Firebase project.
-Deploy this to Railway — it runs YOLOv8 24/7.
-
+Smart Crop Predator Detection — Railway Cloud Server
+=====================================================
 ESP32-CAM POSTs JPEG frames to /detect endpoint.
 Server runs YOLOv8 → pushes to Firebase → DevKit triggers deterrents.
+
+Railway Variables needed:
+  FIREBASE_CREDENTIALS  — paste your firebase_cred.json as single line JSON
+  FIREBASE_URL          — your Firebase database URL
+
+Google Sheets logging is handled by a separate Railway project.
 """
+
+import os
+import json
+import tempfile
+import time
+import numpy as np
+import cv2
+from datetime import datetime
 
 from fastapi import FastAPI, UploadFile, File, BackgroundTasks
 from fastapi.responses import JSONResponse
-import numpy as np
-import cv2
-import time
-import os
-from datetime import datetime
 from ultralytics import YOLO
 import firebase_admin
 from firebase_admin import credentials, db as firebase_db
-import gspread
-from google.oauth2.service_account import Credentials as GCredentials
 
 app = FastAPI()
 
 # ── Config ────────────────────────────────────────────────────
 MODEL_PATH       = "best.pt"
-CONFIDENCE       = 0.6
-COOLDOWN_SECONDS = 30
-FIREBASE_CRED    = "firebase_cred.json"
-SHEETS_NAME      = "Crop Predator Log"
+CONFIDENCE       = 0.55
+COOLDOWN_SECONDS = 20
+CLASS_NAMES      = ["Human", "Locust", "Monkey", "Wildboar"]
 
-# Pre-filled Firebase URL
-firebase_json = json.loads(os.environ["FIREBASE_CREDENTIALS"])
-
-cred = credentials.Certificate(firebase_json)
-
-firebase_admin.initialize_app(
-    cred,
-    {
-        "databaseURL": DATABASE_URL
-    }
+FIREBASE_URL = os.environ.get(
+    "FIREBASE_URL",
+    "https://crop-protection-6f8ca-default-rtdb.asia-southeast1.firebasedatabase.app/"
 )
-# Your model's class names exactly as trained
-CLASS_NAMES = ["Human", "Locust", "Monkey", "Wildboar"]
 
 # ── State ─────────────────────────────────────────────────────
 model               = None
 firebase_ok         = False
-sheets_ok           = False
-sheets_client       = None
 last_detection_time = 0
 total_detections    = 0
 server_start_time   = datetime.now()
 
 
+# ── Get Firebase credentials ──────────────────────────────────
+def get_cred_path():
+    cred_json_str = os.environ.get("FIREBASE_CREDENTIALS")
+
+    if cred_json_str:
+        try:
+            cred_dict = json.loads(cred_json_str)
+            tmp = tempfile.NamedTemporaryFile(
+                mode='w', suffix='.json', delete=False
+            )
+            json.dump(cred_dict, tmp)
+            tmp.close()
+            print("Credentials: loaded from FIREBASE_CREDENTIALS env variable")
+            return tmp.name
+        except Exception as e:
+            print(f"Credentials: failed to parse env variable — {e}")
+            return None
+
+    elif os.path.exists("firebase_cred.json"):
+        print("Credentials: loaded from firebase_cred.json file")
+        return "firebase_cred.json"
+
+    else:
+        print("Credentials: NOT FOUND — set FIREBASE_CREDENTIALS in Railway Variables")
+        return None
+
+
 # ── Startup ───────────────────────────────────────────────────
 @app.on_event("startup")
 async def startup():
-    global model, firebase_ok, sheets_ok, sheets_client
+    global model, firebase_ok
 
-    print("="*50)
+    print("=" * 50)
     print("  Crop Predator Detection — Railway Server")
-    print("="*50)
+    print("=" * 50)
 
-    # Load YOLO
+    # Load YOLO model
     try:
         model = YOLO(MODEL_PATH)
-        model.fuse()   # reduces memory usage on Railway free tier
+        model.fuse()
         print(f"Model: loaded {MODEL_PATH}")
         print(f"Classes: {model.names}")
     except Exception as e:
-        print(f"Model load ERROR: {e}")
+        print(f"Model ERROR: {e}")
 
-    # Firebase
+    # Get credentials
+    cred_path = get_cred_path()
+    if not cred_path:
+        print("WARNING: No credentials — Firebase disabled")
+        print("Server will still run inference but won't log to Firebase")
+        return
+
+    # Firebase init
     try:
-        cred = credentials.Certificate(FIREBASE_CRED)
+        cred = credentials.Certificate(cred_path)
         firebase_admin.initialize_app(cred, {"databaseURL": FIREBASE_URL})
         firebase_ok = True
-        print("Firebase: connected OK")
-        # Log server start
+        print(f"Firebase: connected OK")
+
+        # Log server online status to Firebase
         firebase_db.reference("/crop_predator/server").set({
             "status":     "online",
             "started_at": datetime.now().isoformat(),
@@ -87,28 +115,7 @@ async def startup():
             "url":        "https://crop-protection-api-production.up.railway.app"
         })
     except Exception as e:
-        print(f"Firebase: disabled ({e})")
-
-    # Google Sheets
-    try:
-        scopes = [
-            "https://spreadsheets.google.com/feeds",
-            "https://www.googleapis.com/auth/drive"
-        ]
-        creds = GCredentials.from_service_account_file(FIREBASE_CRED, scopes=scopes)
-        sheets_client = gspread.authorize(creds)
-        sheet = sheets_client.open(SHEETS_NAME).sheet1
-        # Check headers
-        if not sheet.get_all_values():
-            sheet.insert_row(
-                ["Timestamp", "Class", "Confidence", "Temperature", "Humidity", "Firebase Key"],
-                index=1
-            )
-        sheets_ok = True
-        print("Google Sheets: connected OK")
-    except Exception as e:
-        print(f"Google Sheets: disabled ({e})")
-
+        print(f"Firebase: error — {e}")
     print("\nServer ready — waiting for frames from ESP32-CAM\n")
 
 
@@ -121,22 +128,30 @@ def health():
         "model":            MODEL_PATH,
         "classes":          CLASS_NAMES,
         "firebase":         firebase_ok,
-        "sheets":           sheets_ok,
+        "sheets":           "handled by separate Railway project",
+        "confidence":       CONFIDENCE,
+        "cooldown_seconds": COOLDOWN_SECONDS,
         "total_detections": total_detections,
         "uptime":           uptime,
-        "url":              "https://crop-protection-api-production.up.railway.app"
+        "firebase_url":     FIREBASE_URL
     }
 
 
 # ── Detection endpoint ────────────────────────────────────────
 @app.post("/detect")
-async def detect(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
+async def detect(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...)
+):
     global last_detection_time, total_detections
 
     if model is None:
-        return JSONResponse({"error": "model not loaded"}, status_code=503)
+        return JSONResponse(
+            {"error": "model not loaded — check Railway logs"},
+            status_code=503
+        )
 
-    # Decode image
+    # Decode uploaded JPEG
     contents = await file.read()
     nparr    = np.frombuffer(contents, np.uint8)
     frame    = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
@@ -159,31 +174,27 @@ async def detect(background_tasks: BackgroundTasks, file: UploadFile = File(...)
     now           = time.time()
     cooldown_left = max(0, COOLDOWN_SECONDS - (now - last_detection_time))
 
-    # Only trigger if detection found and cooldown elapsed
     if best_label and cooldown_left == 0:
         last_detection_time  = now
         total_detections    += 1
 
         print(f"\n{'='*40}")
         print(f"DETECTED: {best_label} ({best_conf*100:.1f}%)")
-        print(f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        print(f"Total detections: {total_detections}")
+        print(f"Time:     {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"Total:    {total_detections}")
         print(f"{'='*40}")
 
-        # Push to Firebase + Sheets in background (non-blocking)
-        background_tasks.add_task(push_to_firebase, best_label, best_conf)
-        background_tasks.add_task(push_to_sheets,   best_label, best_conf)
-
+        # Push to Firebase in background
+        background_tasks.add_task(push_to_firebase, best_label, bes
         return JSONResponse({
             "detected":         True,
             "class":            best_label,
             "confidence":       round(best_conf, 3),
             "timestamp":        datetime.now().isoformat(),
             "total_detections": total_detections,
-            "message":          f"Firebase updated → DevKit will trigger deterrent"
+            "message":          "Firebase updated — DevKit will trigger deterrent"
         })
 
-    # No detection or in cooldown
     return JSONResponse({
         "detected":     False,
         "class":        best_label,
@@ -198,7 +209,7 @@ def push_to_firebase(label, confidence):
     if not firebase_ok:
         return
     try:
-        # /latest — DevKit polls this
+        # /latest — DevKit polls this every 2 seconds
         firebase_db.reference("/crop_predator/latest").set({
             "class":      label,
             "confidence": round(float(confidence), 3),
@@ -216,24 +227,6 @@ def push_to_firebase(label, confidence):
         print(f"Firebase: pushed {label}")
     except Exception as e:
         print(f"Firebase error: {e}")
-
-
-# ── Sheets push ───────────────────────────────────────────────
-def push_to_sheets(label, confidence):
-    if not sheets_ok or sheets_client is None:
-        return
-    try:
-        sheet = sheets_client.open(SHEETS_NAME).sheet1
-        sheet.append_row([
-            datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            label,
-            round(float(confidence), 3),
-            "", ""   # temp/hum not available on cloud server
-        ])
-        print(f"Sheets: logged {label}")
-    except Exception as e:
-        print(f"Sheets error: {e}")
-
 
 # ── Entry point ───────────────────────────────────────────────
 if __name__ == "__main__":
